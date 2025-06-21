@@ -26,7 +26,6 @@
 
             if (!wordFiles || !processBtn || !downloadBtn || !clearBtn || !fileLabel) {
                 console.error('Required DOM elements not found. Please ensure all IDs are correct in the HTML.');
-                // Attempt to display a user-friendly error if critical elements are missing
                 this.showNotification('Application setup error: Some UI elements are missing. Please check the HTML.', 'error', 0);
                 return;
             }
@@ -284,7 +283,6 @@
 
             progressContainer.style.display = 'none';
             processBtn.textContent = 'Process Documents';
-            // Re-enable if files are selected, otherwise keep disabled
             processBtn.disabled = this.selectedFiles.length === 0;
             this.isProcessing = false;
         }
@@ -296,8 +294,7 @@
             console.log('Resetting file input.');
             const wordFiles = document.getElementById('wordFiles');
             if (wordFiles) {
-                wordFiles.value = ''; // Clears the selected file(s) from the input
-                // Manually trigger handleFileSelect with empty files to reset the label
+                wordFiles.value = '';
                 this.handleFileSelect({ target: { files: [] } });
             }
         }
@@ -343,6 +340,7 @@
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = html;
                 const fullContent = tempDiv.textContent.trim();
+                const preservedHtml = this.preserveFormattingInHtml(html); // MANUAL FIX 1
                 console.log(`Full plain text content length for "${file.name}": ${fullContent.length}`);
 
                 if (!fullContent || fullContent.length < 10) {
@@ -354,7 +352,7 @@
                 console.log(`identifyMultiplePoems returned ${poems.length} poems for "${file.name}".`);
 
                 if (poems.length === 0) {
-                    const singlePoem = this.createSinglePoemFromDocument(tempDiv, file.name, html, fullContent);
+                    const singlePoem = this.createSinglePoemFromDocument(tempDiv, file.name, preservedHtml, fullContent); // Use preservedHtml
                     console.log(`No multiple poems detected, treating "${file.name}" as a single poem: "${singlePoem.title}".`);
                     return [singlePoem];
                 }
@@ -368,189 +366,128 @@
         }
 
         /**
-         * Attempts to identify and separate multiple poems within an HTML document structure.
-         * Uses different strategies (headings, paragraph breaks, separators).
+         * Preserves critical formatting elements from Mammoth HTML
+         * @param {string} html - The HTML content from Mammoth
+         * @returns {string} HTML with preserved formatting
+         */
+        preserveFormattingInHtml(html) { // MANUAL FIX 2
+            // Replace multiple consecutive spaces with non-breaking spaces
+            let formatted = html.replace(/  +/g, (match) => '&nbsp;'.repeat(match.length));
+
+            // Preserve indentation by converting leading spaces to non-breaking spaces
+            formatted = formatted.replace(/^( +)/gm, (match) => '&nbsp;'.repeat(match.length));
+
+            // Ensure line breaks are preserved
+            formatted = formatted.replace(/\n/g, '<br>');
+
+            // Preserve paragraph spacing
+            formatted = formatted.replace(/<\/p>\s*<p>/g, '</p><p style="margin-top: 1em;">');
+
+            return formatted;
+        }
+
+        /**
+         * Improves the poem identification to avoid fragmentation.
          * @param {HTMLElement} tempDiv - A temporary div containing the document's HTML.
          * @param {string} filename - The original filename.
          * @param {string} fullHtml - The full HTML content from Mammoth.js.
          * @returns {Array<Object>} An array of identified poem objects.
          */
-        identifyMultiplePoems(tempDiv, filename, fullHtml) {
+        identifyMultiplePoems(tempDiv, filename, fullHtml) { // MANUAL FIX 3
             console.log(`Starting identifyMultiplePoems for "${filename}".`);
-            // Strategy 1: Split by headings (H1, H2, H3)
-            const headings = tempDiv.querySelectorAll('h1, h2, h3');
-            if (headings.length > 1) {
-                const extractedPoems = this.extractPoemsByHeadings(tempDiv, filename, headings);
-                if (extractedPoems.length > 1) {
-                    console.log(`Strategy 1 (Headings) found ${extractedPoems.length} poems.`);
-                    return extractedPoems;
-                }
-            }
 
-            // Strategy 2: Split by multiple line breaks or page breaks (empty paragraphs)
-            const paragraphs = Array.from(tempDiv.querySelectorAll('p'));
-            if (paragraphs.length > 3) {
-                const extractedPoems = this.extractPoemsByParagraphSeparation(tempDiv, filename, paragraphs);
-                if (extractedPoems.length > 1) {
-                    console.log(`Strategy 2 (Paragraph Separation) found ${extractedPoems.length} poems.`);
-                    return extractedPoems;
-                }
-            }
-
-            // Strategy 3: Split by patterns like "***", "---", or similar visual separators
+            // First, try to detect if this is a collection vs single poem
             const textContent = tempDiv.textContent;
-            const separatorPatterns = [
-                /\n\s*\*{3,}\s*\n/g,
-                /\n\s*-{3,}\s*\n/g,
-                /\n\s*_{3,}\s*\n/g,
-                /\n\s*={3,}\s*\n/g,
-                /\n\s*~{3,}\s*\n/g,
-                /\n\s*\n\s*\n\s*\n/g
-            ];
+            const lineCount = textContent.split('\n').filter(line => line.trim().length > 0).length;
 
-            for (const pattern of separatorPatterns) {
-                const partsHtml = fullHtml.split(pattern);
-                if (partsHtml.length > 1) {
-                    const extractedPoems = this.extractPoemsBySeparator(partsHtml, filename);
-                    if (extractedPoems.length > 1) {
-                        console.log(`Strategy 3 (Separators: ${pattern}) found ${extractedPoems.length} poems.`);
-                        return extractedPoems;
-                    }
+            // If document is relatively short (under 50 meaningful lines), treat as single poem
+            if (lineCount < 50) {
+                console.log(`Document appears to be a single poem (${lineCount} lines)`);
+                return [];
+            }
+
+            // Strategy 1: Split by clear title patterns (bold, centered, or all caps headers)
+            const headings = tempDiv.querySelectorAll('h1, h2, h3, p strong, p b');
+            if (headings.length > 1) {
+                const extractedPoems = this.extractPoemsByStrongTitles(tempDiv, filename, headings);
+                if (extractedPoems.length > 1) {
+                    console.log(`Strategy 1 (Strong Titles) found ${extractedPoems.length} poems.`);
+                    return extractedPoems;
                 }
             }
 
-            console.log(`No multiple poem strategies yielded results for "${filename}".`);
+            // Strategy 2: Split by significant whitespace gaps (3+ empty lines)
+            const significantBreaks = fullHtml.split(/(<p[^>]*>\s*<\/p>\s*){3,}/);
+            if (significantBreaks.length > 2) {
+                const extractedPoems = this.extractPoemsBySignificantBreaks(significantBreaks, filename);
+                if (extractedPoems.length > 1) {
+                    console.log(`Strategy 2 (Significant Breaks) found ${extractedPoems.length} poems.`);
+                    return extractedPoems;
+                }
+            }
+
+            // If no clear separation found, treat as single document
+            console.log(`No clear poem separation found for "${filename}".`);
             return [];
         }
 
         /**
-         * Extracts poems by identifying text blocks separated by heading tags (h1, h2, h3).
-         * @param {HTMLElement} tempDiv - The temporary div containing the document HTML.
-         * @param {string} filename - The name of the original file.
-         * @param {NodeList<HTMLElement>} headings - A NodeList of h1, h2, h3 elements.
-         * @returns {Array<Object>} An array of poem objects.
+         * Extracts poems based on strong visual titles (bold, headers)
          */
-        extractPoemsByHeadings(tempDiv, filename, headings) {
+        extractPoemsByStrongTitles(tempDiv, filename, titleElements) { // MANUAL FIX 4
             const poems = [];
             const allElements = Array.from(tempDiv.children);
-            console.log(`  Extracting by headings for "${filename}". Found ${headings.length} headings.`);
 
-            for (let i = 0; i < headings.length; i++) {
-                const currentHeading = headings[i];
-                const nextHeading = headings[i + 1];
+            for (let i = 0; i < titleElements.length; i++) {
+                const currentTitle = titleElements[i];
+                const nextTitle = titleElements[i + 1];
 
-                const title = currentHeading.textContent.trim() || `Poem ${i + 1} from ${filename}`;
+                const titleText = currentTitle.textContent.trim();
+                if (!titleText || titleText.length > 100) continue;
 
-                const startIndex = allElements.indexOf(currentHeading);
-                const endIndex = nextHeading ? allElements.indexOf(nextHeading) : allElements.length;
+                // Determine the starting element for the poem content
+                // If the title element is a heading (h1-h3) or directly within a p tag,
+                // find its closest parent paragraph for starting slice.
+                const startIndex = allElements.indexOf(currentTitle.closest('p') || currentTitle);
+                const endIndex = nextTitle ?
+                    allElements.indexOf(nextTitle.closest('p') || nextTitle) :
+                    allElements.length;
 
-                const poemElements = allElements.slice(startIndex + 1, endIndex);
-                const poemContent = poemElements.map(el => el.textContent).join('\n').trim();
+                const poemElements = allElements.slice(startIndex, endIndex); // Include the title element itself
                 const poemHtml = poemElements.map(el => el.outerHTML).join('\n');
+                const poemContent = poemElements.map(el => el.textContent).join('\n').trim();
 
-                if (poemContent.length > 10) {
-                    poems.push(this.createPoemObject(title, poemContent, poemHtml, filename));
-                } else {
-                    console.log(`    Skipping heading "${title}" due to insufficient content.`);
+                if (poemContent.length > 20) { // Ensure sufficient content to be a poem
+                    poems.push(this.createPoemObject(titleText, poemContent, this.preserveFormattingInHtml(poemHtml), filename));
                 }
             }
-            console.log(`  Finished heading extraction. Found ${poems.length} poems.`);
+
             return poems.length > 1 ? poems : [];
         }
 
         /**
-         * Extracts poems by identifying blocks of paragraphs separated by empty or very short paragraphs.
-         * Attempts to infer titles from the first paragraph of a new block if it fits title criteria.
-         * @param {HTMLElement} tempDiv - The temporary div containing the document HTML.
-         * @param {string} filename - The name of the original file.
-         * @param {NodeList<HTMLElement>} paragraphs - A NodeList of paragraph elements.
-         * @returns {Array<Object>} An array of poem objects.
+         * Extracts poems based on significant whitespace breaks
          */
-        extractPoemsByParagraphSeparation(tempDiv, filename, paragraphs) {
+        extractPoemsBySignificantBreaks(htmlParts, filename) { // MANUAL FIX 4
             const poems = [];
-            let currentPoemElements = [];
-            let currentTitle = '';
-            let poemIndex = 1;
-            console.log(`  Extracting by paragraph separation for "${filename}". Found ${paragraphs.length} paragraphs.`);
 
-            for (let i = 0; i < paragraphs.length; i++) {
-                const p = paragraphs[i];
-                const text = p.textContent.trim();
-
-                const mightBeTitle = text.length > 0 && text.length < 100 &&
-                    (p.querySelector('strong') || p.querySelector('b') ||
-                     p.style.textAlign === 'center' || /^[A-Z][^.!?]*$/.test(text));
-
-                const isEmptyOrBreak = text.length === 0 || (text.length < 10 && currentPoemElements.length > 0);
-
-                if (isEmptyOrBreak) {
-                    if (currentPoemElements.length > 0) {
-                        const poemContent = currentPoemElements.map(el => el.textContent).join('\n').trim();
-                        const poemHtml = currentPoemElements.map(el => el.outerHTML).join('\n');
-                        const title = currentTitle || `Poem ${poemIndex} from ${filename}`;
-
-                        if (poemContent.length > 10) {
-                            poems.push(this.createPoemObject(title, poemContent, poemHtml, filename));
-                            poemIndex++;
-                            console.log(`    Poem #${poemIndex - 1} identified by paragraph break: "${title}"`);
-                        } else {
-                            console.log(`    Skipping short poem segment before break.`);
-                        }
-                        currentPoemElements = [];
-                        currentTitle = '';
-                    }
-                } else if (mightBeTitle && currentPoemElements.length === 0) {
-                    currentTitle = text;
-                    currentPoemElements.push(p);
-                    console.log(`    Potential title detected: "${text}"`);
-                } else {
-                    currentPoemElements.push(p);
-                }
-            }
-
-            if (currentPoemElements.length > 0) {
-                const poemContent = currentPoemElements.map(el => el.textContent).join('\n').trim();
-                const poemHtml = currentPoemElements.map(el => el.outerHTML).join('\n');
-                const title = currentTitle || `Poem ${poemIndex} from ${filename}`;
-
-                if (poemContent.length > 10) {
-                    poems.push(this.createPoemObject(title, poemContent, poemHtml, filename));
-                    console.log(`    Last poem identified: "${title}"`);
-                } else {
-                    console.log(`    Skipping last poem segment due to insufficient content.`);
-                }
-            }
-            console.log(`  Finished paragraph separation. Found ${poems.length} poems.`);
-            return poems.length > 1 ? poems : [];
-        }
-
-        /**
-         * Extracts poems by splitting the HTML content based on detected separator patterns.
-         * @param {Array<string>} htmlParts - Array of HTML strings separated by a pattern.
-         * @param {string} filename - The name of the original file.
-         * @returns {Array<Object>} An array of poem objects.
-         */
-        extractPoemsBySeparator(htmlParts, filename) {
-            const poems = [];
-            console.log(`  Extracting by custom separators for "${filename}". Found ${htmlParts.length} parts.`);
             htmlParts.forEach((part, index) => {
+                if (!part.trim()) return;
+
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = part.trim();
                 const content = tempDiv.textContent.trim();
 
-                if (content.length > 10) {
-                    const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-                    const firstLine = lines[0] || '';
-                    const title = (firstLine.length > 0 && firstLine.length < 100) ?
-                        firstLine : `Poem ${index + 1} from ${filename}`;
+                if (content.length > 20) { // Ensure sufficient content to be a poem
+                    const lines = content.split('\n').filter(line => line.trim());
+                    const title = lines[0] && lines[0].length < 100 ?
+                        lines[0].trim() :
+                        `Poem ${index + 1}`;
 
-                    poems.push(this.createPoemObject(title, content, part.trim(), filename));
-                    console.log(`    Poem #${index + 1} identified by separator: "${title}"`);
-                } else {
-                    console.log(`    Skipping part ${index + 1} due to insufficient content after separator.`);
+                    poems.push(this.createPoemObject(title, content, this.preserveFormattingInHtml(part.trim()), filename));
                 }
             });
-            console.log(`  Finished separator extraction. Found ${poems.length} poems.`);
+
             return poems;
         }
 
@@ -714,7 +651,6 @@
          * @returns {HTMLElement} The created poem div element.
          */
         createPoemElement(poem, index) {
-            // console.log(`Creating poem element for "${poem.title}" at index ${index}.`);
             const poemDiv = document.createElement('div');
             poemDiv.classList.add('widget-poem-item');
             poemDiv.setAttribute('draggable', 'true');
@@ -959,7 +895,7 @@
                 notificationDiv.classList.remove('opacity-0');
             }, 10);
 
-            if (duration > 0) { // Only set timeout if duration is positive
+            if (duration > 0) {
                 this.notificationTimeout = setTimeout(() => {
                     notificationDiv.classList.add('opacity-0');
                     notificationDiv.addEventListener('transitionend', () => {
@@ -1038,7 +974,7 @@
             downloadBtn.disabled = true;
             const originalText = downloadBtn.textContent;
             downloadBtn.textContent = 'Generating...';
-            this.showNotification(`Generating ${exportFormat.toUpperCase()}...`, 'info', 0); // Indefinite until done
+            this.showNotification(`Generating ${exportFormat.toUpperCase()}...`, 'info', 0);
 
             try {
                 let filename = 'Combined_Poems';
@@ -1053,12 +989,15 @@
                         filename += '.html';
                         break;
                     case 'docx':
-                        blob = new Blob([combinedHtml], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-                        filename += '.docx';
-                        this.showNotification('Downloading .docx. Please note: This is an HTML file saved as .docx for compatibility with Word. Formatting may vary.', 'info', 10000);
+                        // Generate MHTML for better Word compatibility
+                        const mhtmlContent = this._generateMhtmlContentForExport(combinedHtml);
+                        blob = new Blob([mhtmlContent], { type: 'application/x-mimearchive' });
+                        filename += '.mht'; // Use .mht extension for MHTML
+                        this.showNotification('Downloading as .mht (Web Archive). This format offers better compatibility with Word for HTML content. You may need to "Save As" .docx in Word for full features.', 'info', 10000);
                         break;
                     case 'pdf':
                         console.log('Generating PDF...');
+                        console.log('HTML content for PDF:', combinedHtml.substring(0, 500) + '...');
                         await this._generatePdfOutput(combinedHtml, filename);
                         this.showNotification('PDF generated!', 'success');
                         this.resetDownloadUI(downloadBtn, originalText);
@@ -1070,7 +1009,7 @@
                         return;
                 }
 
-                saveAs(blob, filename); // Uses FileSaver.js
+                saveAs(blob, filename);
                 this.showNotification('Document downloaded successfully!', 'success');
                 console.log(`File "${filename}" downloaded.`);
 
@@ -1093,7 +1032,7 @@
             downloadBtn.disabled = this.poems.length === 0;
             const notificationContainer = document.getElementById('notificationContainer');
             if (notificationContainer) {
-                notificationContainer.innerHTML = ''; // Clear indefinite notification
+                notificationContainer.innerHTML = '';
             }
         }
 
@@ -1111,79 +1050,32 @@
                 <title>Combined Poems</title>
                 <style>
                     body {
-                        font-family: 'Inter', sans-serif;
+                        font-family: 'Times New Roman', serif; /* MANUAL FIX 5 */
                         line-height: 1.6;
-                        margin: 20px auto;
-                        max-width: 800px;
-                        padding: 0 20px;
-                        color: #333;
+                        margin: 40px; /* MANUAL FIX 5 */
+                        white-space: pre-wrap; /* MANUAL FIX 5 */
                     }
-                    h1 {
-                        text-align: center;
-                        font-size: 3em;
-                        color: #1a202c;
-                        margin-bottom: 30px;
-                    }
-                    h2 {
-                        font-size: 2em;
-                        color: #333;
-                        margin-top: 40px;
-                        margin-bottom: 15px;
-                        border-bottom: 1px solid #eee;
-                        padding-bottom: 5px;
-                    }
-                    h3 {
-                        font-size: 1.5em;
-                        color: #444;
-                        margin-top: 30px;
-                        margin-bottom: 10px;
-                    }
-                    p {
-                        margin-bottom: 1em;
-                    }
-                    .poem-container {
-                        margin-bottom: 40px;
-                        padding-bottom: 20px;
-                        border-bottom: 1px dashed #ddd;
-                        page-break-inside: avoid;
-                    }
-                    .poem-container:last-of-type {
-                        border-bottom: none;
-                        margin-bottom: 0;
-                    }
-                    .poem-source {
-                        font-style: italic;
-                        color: #666;
-                        font-size: 0.9em;
-                        margin-top: -10px;
-                        margin-bottom: 15px;
-                    }
-                    .table-of-contents {
+                    .poem { /* MANUAL FIX 5 */
                         margin-bottom: 50px;
-                        padding: 20px;
-                        background-color: #f9f9f9;
-                        border: 1px solid #eee;
-                        border-radius: 8px;
+                        page-break-after: auto;
+                        white-space: pre-wrap;
+                        font-family: 'Courier New', monospace; /* Better for preserving spacing */
                     }
-                    .table-of-contents ol {
-                        list-style-type: decimal;
-                        padding-left: 25px;
+                    .poem-title { /* MANUAL FIX 5 */
+                        font-size: 18px;
+                        font-weight: bold;
+                        text-align: center;
+                        margin-bottom: 20px;
+                        font-family: 'Times New Roman', serif;
                     }
-                    .table-of-contents li {
-                        margin-bottom: 5px;
+                    .poem-content { /* MANUAL FIX 5 */
+                        white-space: pre-wrap;
+                        font-family: 'Courier New', monospace;
+                        line-height: 1.4;
                     }
-                    .table-of-contents a {
-                        color: #007bff;
-                        text-decoration: none;
-                        transition: color 0.2s ease-in-out;
-                    }
-                    .table-of-contents a:hover {
-                        color: #0056b3;
-                        text-decoration: underline;
-                    }
-                    .page-break-after {
-                        page-break-after: always;
-                    }
+                    .page-break { page-break-before: always; } /* MANUAL FIX 5 */
+                    p { margin-bottom: 0; } /* MANUAL FIX 5 */
+                    br { line-height: 1.2; } /* MANUAL FIX 5 */
                 </style>
             </head>
             <body>
@@ -1215,6 +1107,43 @@
         }
 
         /**
+         * Generates MHTML content from an HTML string for better Word compatibility.
+         * @param {string} htmlContent - The HTML string to convert to MHTML.
+         * @returns {string} The MHTML string.
+         */
+        _generateMhtmlContentForExport(htmlContent) {
+            const boundary = `----=_NextPart_${Math.random().toString().slice(2)}`;
+            let mhtml = `MIME-Version: 1.0\n`;
+            mhtml += `Content-Type: multipart/related; boundary="${boundary}"\n\n`;
+
+            mhtml += `--${boundary}\n`;
+            mhtml += `Content-Type: text/html; charset="utf-8"\n`;
+            mhtml += `Content-Transfer-Encoding: quoted-printable\n`;
+            mhtml += `Content-Location: about:blank\n\n`;
+
+            mhtml += this._quotedPrintableEncode(htmlContent) + '\n\n';
+
+            mhtml += `--${boundary}--`;
+            return mhtml;
+        }
+
+        /**
+         * Simple quoted-printable encoder (basic implementation, might need more robust for complex HTML)
+         * @param {string} str - The string to encode.
+         * @returns {string} The quoted-printable encoded string.
+         */
+        _quotedPrintableEncode(str) {
+            return str.replace(/=/g, '=3D')
+                      .replace(/\?/g, '=3F')
+                      .replace(/_/g, '=5F')
+                      .replace(/\r?\n/g, '=\r\n')
+                      .replace(/[\x00-\x1F\x7F-\xFF]/g, (char) => {
+                          const byte = char.charCodeAt(0);
+                          return '=' + byte.toString(16).toUpperCase().padStart(2, '0');
+                      });
+        }
+
+        /**
          * Generates and downloads a PDF document from the given HTML content.
          * @param {string} htmlContent - The HTML string to convert to PDF.
          * @param {string} filename - The desired filename for the PDF.
@@ -1235,6 +1164,9 @@
             tempDiv.style.visibility = 'hidden';
             document.body.appendChild(tempDiv);
             console.log('Temporary div created and appended for PDF generation.');
+
+            // Increased delay to 500ms
+            await new Promise(resolve => setTimeout(resolve, 500));
 
             try {
                 await html2pdf().set(opt).from(tempDiv).save();
