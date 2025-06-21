@@ -8,6 +8,7 @@
             this.draggedIndex = null;
             this.isProcessing = false;
             this.notificationTimeout = null;
+            console.log('PoemCompiler initialized.');
             this.initializeEventListeners();
             this.updateDisplay();
         }
@@ -16,6 +17,7 @@
          * Initializes all event listeners for the UI elements.
          */
         initializeEventListeners() {
+            console.log('Initializing event listeners...');
             const wordFiles = document.getElementById('wordFiles');
             const processBtn = document.getElementById('processBtn');
             const downloadBtn = document.getElementById('downloadBtn');
@@ -24,72 +26,76 @@
 
             if (!wordFiles || !processBtn || !downloadBtn || !clearBtn || !fileLabel) {
                 console.error('Required DOM elements not found. Please ensure all IDs are correct in the HTML.');
+                // Attempt to display a user-friendly error if critical elements are missing
+                this.showNotification('Application setup error: Some UI elements are missing. Please check the HTML.', 'error', 0);
                 return;
             }
 
             // File input change event
             wordFiles.addEventListener('change', (e) => {
+                console.log('File input change event triggered.');
                 this.handleFileSelect(e);
             });
 
             // Process button click event
             processBtn.addEventListener('click', () => {
+                console.log('Process button clicked. current this.isProcessing:', this.isProcessing);
                 if (!this.isProcessing) {
                     this.processDocuments();
+                } else {
+                    this.showNotification('Already processing documents. Please wait.', 'info');
                 }
             });
 
             // Download button click event
             downloadBtn.addEventListener('click', () => {
+                console.log('Download button clicked.');
                 this.downloadCombinedDocument();
             });
 
             // Clear button click event
             clearBtn.addEventListener('click', () => {
+                console.log('Clear button clicked.');
                 this.clearAllPoems();
             });
 
             // --- Drag and drop functionality for the file label ---
-            // Prevent default drag behaviors
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
                 fileLabel.addEventListener(eventName, (e) => this.preventDefaults(e), false);
             });
 
-            // Add visual feedback on drag enter/over
             ['dragenter', 'dragover'].forEach(eventName => {
                 fileLabel.addEventListener(eventName, () => {
-                    fileLabel.style.borderColor = '#3b82f6'; // Tailwind blue-500
-                    fileLabel.style.backgroundColor = '#eff6ff'; // Tailwind blue-50
+                    fileLabel.style.borderColor = '#3b82f6';
+                    fileLabel.style.backgroundColor = '#eff6ff';
                 }, false);
             });
 
-            // Remove visual feedback on drag leave/drop
             ['dragleave', 'drop'].forEach(eventName => {
                 fileLabel.addEventListener(eventName, () => {
-                    fileLabel.style.borderColor = '#d1d5db'; // Tailwind gray-300
+                    fileLabel.style.borderColor = '#d1d5db';
                     fileLabel.style.backgroundColor = '';
                 }, false);
             });
 
-            // Handle file drop
             fileLabel.addEventListener('drop', (e) => {
+                console.log('File dropped.');
                 const files = Array.from(e.dataTransfer.files).filter(file =>
                     file.name.toLowerCase().endsWith('.docx')
                 );
                 if (files.length > 0) {
-                    // Create a DataTransfer object and assign files to the input
-                    // This simulates a user selecting files via the input field
                     const dt = new DataTransfer();
                     files.forEach(file => dt.items.add(file));
                     wordFiles.files = dt.files;
-
-                    // Manually dispatch a change event to trigger handleFileSelect
                     const event = new Event('change', { bubbles: true });
-                    wordFiles.dispatchEvent(event);
+                    wordFiles.dispatchEvent(event); // Trigger change event programmatically
+                    console.log('Dropped .docx files, dispatched change event.');
                 } else if (e.dataTransfer.files.length > 0) {
                     this.showNotification('Please upload only .docx files', 'warning');
+                    console.warn('Dropped files but none were .docx.');
                 }
             }, false);
+            console.log('Event listeners initialized successfully.');
         }
 
         /**
@@ -108,20 +114,22 @@
          */
         handleFileSelect(event) {
             const files = Array.from(event.target.files);
+            console.log('Files selected in handleFileSelect:', files);
+
             const fileLabel = document.getElementById('fileLabel');
             const processBtn = document.getElementById('processBtn');
 
-            // Validate file types
             const validFiles = files.filter(file => file.name.toLowerCase().endsWith('.docx'));
             const invalidFiles = files.filter(file => !file.name.toLowerCase().endsWith('.docx'));
 
             if (invalidFiles.length > 0) {
                 this.showNotification(`${invalidFiles.length} invalid file(s) ignored. Only .docx files are supported.`, 'warning');
+                console.warn(`${invalidFiles.length} invalid file(s) ignored.`);
             }
 
             if (validFiles.length > 0) {
                 this.selectedFiles = validFiles;
-                // Generate a concise list of file names for display
+                console.log('Valid files assigned to this.selectedFiles:', this.selectedFiles);
                 const fileNames = validFiles.length > 3
                     ? `${validFiles.slice(0, 3).map(f => f.name).join(', ')} and ${validFiles.length - 3} more...`
                     : validFiles.map(f => f.name).join(', ');
@@ -134,6 +142,7 @@
                 fileLabel.classList.add('has-files');
                 processBtn.disabled = false;
                 this.announceToScreenReader('process-status', `${validFiles.length} documents selected, ready to process`);
+                console.log(`UI updated: ${validFiles.length} documents selected, process button enabled.`);
             } else {
                 this.selectedFiles = [];
                 fileLabel.innerHTML = `
@@ -144,6 +153,7 @@
                 fileLabel.classList.remove('has-files');
                 processBtn.disabled = true;
                 this.announceToScreenReader('process-status', 'No valid documents selected');
+                console.log('No valid files selected. UI reset.');
             }
         }
 
@@ -154,11 +164,13 @@
         async processDocuments() {
             if (this.selectedFiles.length === 0) {
                 this.showNotification('Please select Word documents first!', 'warning');
+                console.warn('ProcessDocuments called with no selected files.');
                 return;
             }
 
             if (this.isProcessing) {
-                return; // Prevent multiple simultaneous processing
+                console.log('Attempted to process while already processing.');
+                return;
             }
 
             this.isProcessing = true;
@@ -166,7 +178,7 @@
             const progressContainer = document.getElementById('progressContainer');
             const progressBar = document.getElementById('progressBar');
 
-            // Update UI for processing state
+            console.log('Starting processDocuments. Updating UI...');
             processBtn.disabled = true;
             processBtn.textContent = 'Processing...';
             progressContainer.style.display = 'block';
@@ -179,18 +191,19 @@
                 let processedPoemCount = 0;
                 let skippedCount = 0;
                 const totalFiles = this.selectedFiles.length;
+                console.log(`Processing ${totalFiles} selected files.`);
                 const errors = [];
 
                 for (let i = 0; i < this.selectedFiles.length; i++) {
                     const file = this.selectedFiles[i];
+                    console.log(`Processing file ${i + 1}/${totalFiles}: ${file.name}`);
 
                     try {
                         const poemsFromFile = await this.extractPoemsFromDocument(file);
+                        console.log(`Extracted ${poemsFromFile ? poemsFromFile.length : 0} potential poems from ${file.name}`);
                         if (poemsFromFile && poemsFromFile.length > 0) {
-                            // Check for duplicates and add new poems
                             for (const poemData of poemsFromFile) {
                                 if (poemData && poemData.content && poemData.content.trim().length > 0) {
-                                    // Check for duplicates based on title and content similarity
                                     const isDuplicate = this.poems.some(existing =>
                                         existing.title.toLowerCase() === poemData.title.toLowerCase() &&
                                         (existing.content.trim().length > 50 && existing.content.trim() === poemData.content.trim())
@@ -199,33 +212,35 @@
                                     if (!isDuplicate) {
                                         this.poems.push(poemData);
                                         processedPoemCount++;
+                                        console.log(`Added new poem: "${poemData.title}" from "${file.name}"`);
                                     } else {
                                         skippedCount++;
-                                        console.warn(`Duplicate poem detected and skipped: ${poemData.title || 'Untitled'}`);
+                                        console.warn(`Duplicate poem detected and skipped: "${poemData.title || 'Untitled'}" from "${file.name}"`);
                                     }
+                                } else {
+                                    console.warn(`Poem data from ${file.name} was empty or invalid.`);
                                 }
                             }
                         } else {
                             errors.push(`${file.name}: No valid poems found`);
+                            console.warn(`No valid poems found in ${file.name}.`);
                         }
                     } catch (error) {
                         console.error(`Error processing ${file.name}:`, error);
                         errors.push(`${file.name}: ${error.message}`);
                     }
 
-                    // Update progress
                     const progress = ((i + 1) / totalFiles) * 100;
                     progressBar.style.width = `${progress}%`;
                     progressBar.setAttribute('aria-valuenow', Math.round(progress).toString());
+                    console.log(`Progress: ${Math.round(progress)}%`);
 
-                    // Small delay to show progress, but not block UI
                     await new Promise(resolve => requestAnimationFrame(resolve));
                 }
 
-                // Reset UI state
+                console.log('Finished processing all files. Resetting UI.');
                 this.resetProcessingUI();
 
-                // Show results
                 if (processedPoemCount > 0) {
                     this.updateDisplay();
                     let message = `Successfully processed ${processedPoemCount} new poem${processedPoemCount > 1 ? 's' : ''}!`;
@@ -234,9 +249,8 @@
                     }
                     this.showNotification(message, 'success');
                     this.announceToScreenReader('process-status', `${processedPoemCount} poems processed successfully`);
-
-                    // Reset file input only if some poems were successfully processed
                     this.resetFileInput();
+                    console.log('Poem processing complete. Display updated.');
                 } else {
                     let message = 'No new poems found in the uploaded documents!';
                     if (skippedCount > 0) {
@@ -244,19 +258,19 @@
                     }
                     this.showNotification(message, 'warning');
                     this.announceToScreenReader('process-status', 'No new poems found');
+                    console.log('No new poems added after processing.');
                 }
 
-                // Show errors if any
                 if (errors.length > 0) {
-                    console.error('Processing errors:', errors);
+                    console.error('Summary of processing errors:', errors);
                     this.showNotification(`${errors.length} file(s) had errors. Check console for details.`, 'error', 8000);
                 }
 
             } catch (error) {
                 this.resetProcessingUI();
-                console.error('Document processing error:', error);
-                this.showNotification('Error processing documents: ' + error.message, 'error');
-                this.announceToScreenReader('process-status', 'Error processing documents');
+                console.error('Unhandled critical error during document processing:', error);
+                this.showNotification('A critical error occurred: ' + error.message, 'error');
+                this.announceToScreenReader('process-status', 'Critical error during document processing.');
             }
         }
 
@@ -264,12 +278,14 @@
          * Resets the UI elements related to document processing.
          */
         resetProcessingUI() {
+            console.log('Resetting processing UI.');
             const processBtn = document.getElementById('processBtn');
             const progressContainer = document.getElementById('progressContainer');
 
             progressContainer.style.display = 'none';
             processBtn.textContent = 'Process Documents';
-            processBtn.disabled = this.selectedFiles.length === 0; // Re-enable if files are selected
+            // Re-enable if files are selected, otherwise keep disabled
+            processBtn.disabled = this.selectedFiles.length === 0;
             this.isProcessing = false;
         }
 
@@ -277,6 +293,7 @@
          * Clears the selected files from the input and resets the file label.
          */
         resetFileInput() {
+            console.log('Resetting file input.');
             const wordFiles = document.getElementById('wordFiles');
             if (wordFiles) {
                 wordFiles.value = ''; // Clears the selected file(s) from the input
@@ -289,6 +306,7 @@
          * Clears all loaded poems and updates the display.
          */
         clearAllPoems() {
+            console.log('Clearing all poems.');
             this.poems = [];
             this.updateDisplay();
             this.resetFileInput();
@@ -304,41 +322,47 @@
          * @throws {Error} If Mammoth.js is not loaded or content extraction fails.
          */
         async extractPoemsFromDocument(file) {
+            console.log(`Attempting to extract poems from "${file.name}"...`);
             if (!window.mammoth) {
+                console.error('Mammoth library (window.mammoth) is not loaded.');
                 throw new Error('Mammoth library not loaded. Please check the script tag.');
             }
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
+                console.log(`File "${file.name}" converted to ArrayBuffer.`);
                 const result = await window.mammoth.convertToHtml({ arrayBuffer });
+                console.log(`Mammoth conversion result for "${file.name}":`, result);
 
                 if (!result.value) {
+                    console.warn(`Mammoth returned no HTML content for "${file.name}".`);
                     throw new Error('No content extracted from document by Mammoth.');
                 }
 
                 const html = result.value;
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = html;
-
-                // Get full content for analysis (plain text)
                 const fullContent = tempDiv.textContent.trim();
+                console.log(`Full plain text content length for "${file.name}": ${fullContent.length}`);
 
                 if (!fullContent || fullContent.length < 10) {
+                    console.warn(`Document "${file.name}" appears empty or too short after extraction.`);
                     throw new Error('Document appears to be empty or too short after extraction.');
                 }
 
-                // Attempt to extract multiple poems from the document
                 const poems = this.identifyMultiplePoems(tempDiv, file.name, html);
+                console.log(`identifyMultiplePoems returned ${poems.length} poems for "${file.name}".`);
 
                 if (poems.length === 0) {
-                    // If no clear multiple poems were identified, treat the entire document as one poem
                     const singlePoem = this.createSinglePoemFromDocument(tempDiv, file.name, html, fullContent);
+                    console.log(`No multiple poems detected, treating "${file.name}" as a single poem: "${singlePoem.title}".`);
                     return [singlePoem];
                 }
 
                 return poems;
 
             } catch (error) {
+                console.error(`Failed to extract content from "${file.name}":`, error);
                 throw new Error(`Failed to extract content from "${file.name}": ${error.message}`);
             }
         }
@@ -352,44 +376,51 @@
          * @returns {Array<Object>} An array of identified poem objects.
          */
         identifyMultiplePoems(tempDiv, filename, fullHtml) {
-            const poems = [];
-
+            console.log(`Starting identifyMultiplePoems for "${filename}".`);
             // Strategy 1: Split by headings (H1, H2, H3)
             const headings = tempDiv.querySelectorAll('h1, h2, h3');
             if (headings.length > 1) {
                 const extractedPoems = this.extractPoemsByHeadings(tempDiv, filename, headings);
-                if (extractedPoems.length > 1) return extractedPoems;
+                if (extractedPoems.length > 1) {
+                    console.log(`Strategy 1 (Headings) found ${extractedPoems.length} poems.`);
+                    return extractedPoems;
+                }
             }
 
             // Strategy 2: Split by multiple line breaks or page breaks (empty paragraphs)
-            // This is done by looking at consecutive empty or very short paragraphs
             const paragraphs = Array.from(tempDiv.querySelectorAll('p'));
             if (paragraphs.length > 3) {
                 const extractedPoems = this.extractPoemsByParagraphSeparation(tempDiv, filename, paragraphs);
-                if (extractedPoems.length > 1) return extractedPoems;
+                if (extractedPoems.length > 1) {
+                    console.log(`Strategy 2 (Paragraph Separation) found ${extractedPoems.length} poems.`);
+                    return extractedPoems;
+                }
             }
 
             // Strategy 3: Split by patterns like "***", "---", or similar visual separators
             const textContent = tempDiv.textContent;
             const separatorPatterns = [
-                /\n\s*\*{3,}\s*\n/g,      // Three or more asterisks with surrounding newlines
-                /\n\s*-{3,}\s*\n/g,      // Three or more dashes with surrounding newlines
-                /\n\s*_{3,}\s*\n/g,      // Three or more underscores with surrounding newlines
-                /\n\s*={3,}\s*\n/g,      // Three or more equals with surrounding newlines
-                /\n\s*~{3,}\s*\n/g,      // Three or more tildes with surrounding newlines
-                /\n\s*\n\s*\n\s*\n/g     // Four or more consecutive newlines (more explicit break)
+                /\n\s*\*{3,}\s*\n/g,
+                /\n\s*-{3,}\s*\n/g,
+                /\n\s*_{3,}\s*\n/g,
+                /\n\s*={3,}\s*\n/g,
+                /\n\s*~{3,}\s*\n/g,
+                /\n\s*\n\s*\n\s*\n/g
             ];
 
             for (const pattern of separatorPatterns) {
-                // Split the raw HTML to preserve formatting as much as possible
                 const partsHtml = fullHtml.split(pattern);
                 if (partsHtml.length > 1) {
                     const extractedPoems = this.extractPoemsBySeparator(partsHtml, filename);
-                    if (extractedPoems.length > 1) return extractedPoems;
+                    if (extractedPoems.length > 1) {
+                        console.log(`Strategy 3 (Separators: ${pattern}) found ${extractedPoems.length} poems.`);
+                        return extractedPoems;
+                    }
                 }
             }
 
-            return []; // Return empty array if no multiple poems detected by any strategy
+            console.log(`No multiple poem strategies yielded results for "${filename}".`);
+            return [];
         }
 
         /**
@@ -402,14 +433,14 @@
         extractPoemsByHeadings(tempDiv, filename, headings) {
             const poems = [];
             const allElements = Array.from(tempDiv.children);
+            console.log(`  Extracting by headings for "${filename}". Found ${headings.length} headings.`);
 
             for (let i = 0; i < headings.length; i++) {
                 const currentHeading = headings[i];
                 const nextHeading = headings[i + 1];
 
-                const title = currentHeading.textContent.trim() || `Poem ${i + 1}`;
+                const title = currentHeading.textContent.trim() || `Poem ${i + 1} from ${filename}`;
 
-                // Find content between this heading and the next
                 const startIndex = allElements.indexOf(currentHeading);
                 const endIndex = nextHeading ? allElements.indexOf(nextHeading) : allElements.length;
 
@@ -417,12 +448,14 @@
                 const poemContent = poemElements.map(el => el.textContent).join('\n').trim();
                 const poemHtml = poemElements.map(el => el.outerHTML).join('\n');
 
-                if (poemContent.length > 10) { // Ensure sufficient content
+                if (poemContent.length > 10) {
                     poems.push(this.createPoemObject(title, poemContent, poemHtml, filename));
+                } else {
+                    console.log(`    Skipping heading "${title}" due to insufficient content.`);
                 }
             }
-
-            return poems.length > 1 ? poems : []; // Only return if we actually found multiple distinct poems
+            console.log(`  Finished heading extraction. Found ${poems.length} poems.`);
+            return poems.length > 1 ? poems : [];
         }
 
         /**
@@ -438,55 +471,57 @@
             let currentPoemElements = [];
             let currentTitle = '';
             let poemIndex = 1;
+            console.log(`  Extracting by paragraph separation for "${filename}". Found ${paragraphs.length} paragraphs.`);
 
             for (let i = 0; i < paragraphs.length; i++) {
                 const p = paragraphs[i];
                 const text = p.textContent.trim();
 
-                // Check if this might be a title (short, possibly bold/centered, first letter capitalized)
                 const mightBeTitle = text.length > 0 && text.length < 100 &&
                     (p.querySelector('strong') || p.querySelector('b') ||
                      p.style.textAlign === 'center' || /^[A-Z][^.!?]*$/.test(text));
 
-                // Check for poem separator (empty paragraph or very short paragraph acting as a break)
                 const isEmptyOrBreak = text.length === 0 || (text.length < 10 && currentPoemElements.length > 0);
 
                 if (isEmptyOrBreak) {
-                    // End current poem if we have content
                     if (currentPoemElements.length > 0) {
                         const poemContent = currentPoemElements.map(el => el.textContent).join('\n').trim();
                         const poemHtml = currentPoemElements.map(el => el.outerHTML).join('\n');
-                        const title = currentTitle || `Poem ${poemIndex}`;
+                        const title = currentTitle || `Poem ${poemIndex} from ${filename}`;
 
-                        if (poemContent.length > 10) { // Ensure content is substantial
+                        if (poemContent.length > 10) {
                             poems.push(this.createPoemObject(title, poemContent, poemHtml, filename));
                             poemIndex++;
+                            console.log(`    Poem #${poemIndex - 1} identified by paragraph break: "${title}"`);
+                        } else {
+                            console.log(`    Skipping short poem segment before break.`);
                         }
                         currentPoemElements = [];
                         currentTitle = '';
                     }
                 } else if (mightBeTitle && currentPoemElements.length === 0) {
-                    // This might be a title for a new poem, and no content has been added yet for it
                     currentTitle = text;
-                    currentPoemElements.push(p); // Include the title paragraph in poem content
+                    currentPoemElements.push(p);
+                    console.log(`    Potential title detected: "${text}"`);
                 } else {
-                    // Regular poem content
                     currentPoemElements.push(p);
                 }
             }
 
-            // Handle the last poem
             if (currentPoemElements.length > 0) {
                 const poemContent = currentPoemElements.map(el => el.textContent).join('\n').trim();
                 const poemHtml = currentPoemElements.map(el => el.outerHTML).join('\n');
-                const title = currentTitle || `Poem ${poemIndex}`;
+                const title = currentTitle || `Poem ${poemIndex} from ${filename}`;
 
                 if (poemContent.length > 10) {
                     poems.push(this.createPoemObject(title, poemContent, poemHtml, filename));
+                    console.log(`    Last poem identified: "${title}"`);
+                } else {
+                    console.log(`    Skipping last poem segment due to insufficient content.`);
                 }
             }
-
-            return poems.length > 1 ? poems : []; // Only return if we found multiple poems
+            console.log(`  Finished paragraph separation. Found ${poems.length} poems.`);
+            return poems.length > 1 ? poems : [];
         }
 
         /**
@@ -497,21 +532,25 @@
          */
         extractPoemsBySeparator(htmlParts, filename) {
             const poems = [];
+            console.log(`  Extracting by custom separators for "${filename}". Found ${htmlParts.length} parts.`);
             htmlParts.forEach((part, index) => {
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = part.trim();
                 const content = tempDiv.textContent.trim();
 
-                if (content.length > 10) { // Ensure sufficient content
-                    // Try to extract a title from the first non-empty line of the part
+                if (content.length > 10) {
                     const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
                     const firstLine = lines[0] || '';
                     const title = (firstLine.length > 0 && firstLine.length < 100) ?
-                        firstLine : `Poem ${index + 1}`;
+                        firstLine : `Poem ${index + 1} from ${filename}`;
 
                     poems.push(this.createPoemObject(title, content, part.trim(), filename));
+                    console.log(`    Poem #${index + 1} identified by separator: "${title}"`);
+                } else {
+                    console.log(`    Skipping part ${index + 1} due to insufficient content after separator.`);
                 }
             });
+            console.log(`  Finished separator extraction. Found ${poems.length} poems.`);
             return poems;
         }
 
@@ -524,11 +563,12 @@
          * @returns {Object} A single poem object.
          */
         createSinglePoemFromDocument(tempDiv, filename, html, content) {
+            console.log(`Creating single poem object for "${filename}".`);
             const title = this.extractTitle(tempDiv, filename);
             const wordCount = content.split(/\s+/).filter(word => word.length > 0).length;
 
             return {
-                id: Date.now() + Math.random(), // Unique ID for each poem
+                id: Date.now() + Math.random(),
                 title: title,
                 content: content,
                 htmlContent: html,
@@ -548,7 +588,6 @@
          */
         createPoemObject(title, content, htmlContent, filename) {
             const wordCount = content.split(/\s+/).filter(word => word.length > 0).length;
-
             return {
                 id: Date.now() + Math.random(),
                 title: title,
@@ -568,21 +607,21 @@
          */
         extractTitle(tempDiv, filename) {
             let title = '';
+            console.log(`Attempting to extract title for "${filename}".`);
 
-            // 1. Try headings (H1, H2, H3)
             const headings = tempDiv.querySelectorAll('h1, h2, h3');
             for (let i = 0; i < headings.length; i++) {
                 const hText = headings[i].textContent.trim();
-                if (hText.length > 0 && hText.length < 150) { // Limit title length
+                if (hText.length > 0 && hText.length < 150) {
                     title = hText;
+                    console.log(`  Title found from heading: "${title}"`);
                     break;
                 }
             }
 
-            // 2. Try bold or centered text near the beginning
             if (!title) {
                 const paragraphs = tempDiv.querySelectorAll('p');
-                for (let i = 0; i < Math.min(3, paragraphs.length); i++) { // Check first few paragraphs
+                for (let i = 0; i < Math.min(3, paragraphs.length); i++) {
                     const p = paragraphs[i];
                     const pText = p.textContent.trim();
                     if (pText.length > 0 && pText.length < 150) {
@@ -591,13 +630,13 @@
 
                         if (isBold || isCentered) {
                             title = pText;
+                            console.log(`  Title found from bold/centered paragraph: "${title}"`);
                             break;
                         }
                     }
                 }
             }
 
-            // 3. If no clear heading or bold/centered, try first non-empty line
             if (!title) {
                 const paragraphs = tempDiv.querySelectorAll('p');
                 if (paragraphs.length > 0) {
@@ -606,26 +645,26 @@
                         const firstLine = firstParagraphText.split('\n')[0].trim();
                         if (firstLine.length > 0 && firstLine.length < 150) {
                             title = firstLine;
+                            console.log(`  Title found from first line of first paragraph: "${title}"`);
                         }
                     }
                 }
             }
 
-            // 4. Fallback to filename (cleaned up)
             if (!title) {
                 title = filename.replace(/\.docx$/i, '').replace(/[_-]/g, ' ').trim();
+                console.log(`  Title falling back to cleaned filename: "${title}"`);
             }
 
-            // Final cleanup and default
-            title = title.replace(/\s+/g, ' ').trim(); // Replace multiple spaces with single space
+            title = title.replace(/\s+/g, ' ').trim();
             if (title.length > 150) {
                 title = title.substring(0, 147) + '...';
             }
 
             if (!title) {
                 title = "Untitled Poem";
+                console.log(`  Title defaulted to "Untitled Poem".`);
             }
-
             return title;
         }
 
@@ -634,6 +673,7 @@
          * Attaches drag-and-drop and button event listeners to each poem element.
          */
         updateDisplay() {
+            console.log('Updating display. Current poem count:', this.poems.length);
             const poemList = document.getElementById('poemList');
             const poemCountSpan = document.getElementById('poemCount');
             const downloadBtn = document.getElementById('downloadBtn');
@@ -644,7 +684,7 @@
                 return;
             }
 
-            poemList.innerHTML = ''; // Clear existing list items
+            poemList.innerHTML = '';
             poemCountSpan.textContent = this.poems.length;
 
             if (this.poems.length === 0) {
@@ -655,14 +695,15 @@
                 `;
                 downloadBtn.disabled = true;
                 clearBtn.disabled = true;
+                console.log('Display updated: No poems loaded, buttons disabled.');
             } else {
                 this.poems.forEach((poem, index) => {
                     const poemDiv = this.createPoemElement(poem, index);
                     poemList.appendChild(poemDiv);
                 });
-
                 downloadBtn.disabled = false;
                 clearBtn.disabled = false;
+                console.log('Display updated: Poems rendered, buttons enabled.');
             }
         }
 
@@ -673,18 +714,18 @@
          * @returns {HTMLElement} The created poem div element.
          */
         createPoemElement(poem, index) {
+            // console.log(`Creating poem element for "${poem.title}" at index ${index}.`);
             const poemDiv = document.createElement('div');
             poemDiv.classList.add('widget-poem-item');
-            poemDiv.setAttribute('draggable', 'true'); // Enable drag
-            poemDiv.setAttribute('data-index', index); // Store index for reordering
+            poemDiv.setAttribute('draggable', 'true');
+            poemDiv.setAttribute('data-index', index);
             poemDiv.setAttribute('role', 'listitem');
             poemDiv.setAttribute('aria-label', `Poem: ${poem.title}, position ${index + 1} of ${this.poems.length}. Press Ctrl+Up/Down to move, Delete to remove.`);
-            poemDiv.setAttribute('tabindex', '0'); // Make draggable items keyboard focusable
+            poemDiv.setAttribute('tabindex', '0');
 
-            // Create a safe preview text (truncated and HTML escaped)
             const preview = poem.content.length > 100
-                ? poem.content.substring(0, 100).split('\n')[0] + '...' // Take first line of preview
-                : poem.content.split('\n')[0]; // Take first line if short
+                ? poem.content.substring(0, 100).split('\n')[0] + '...'
+                : poem.content.split('\n')[0];
 
             poemDiv.innerHTML = `
                 <div class="widget-drag-indicator" aria-hidden="true">⋮⋮</div>
@@ -723,30 +764,28 @@
          * @param {number} index - The current index of the poem.
          */
         attachPoemEventListeners(poemDiv, index) {
-            // --- Drag and drop event listeners ---
             poemDiv.addEventListener('dragstart', (e) => {
                 this.draggedIndex = index;
                 poemDiv.classList.add('dragging');
                 e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', index.toString()); // Store original index
+                e.dataTransfer.setData('text/plain', index.toString());
                 this.announceToScreenReader('process-status', `Started dragging ${this.poems[index].title}`);
+                console.log(`Drag started for poem "${this.poems[index].title}" at index ${index}.`);
             });
 
             poemDiv.addEventListener('dragend', () => {
-                // Remove dragging class from all items
                 document.querySelectorAll('.widget-poem-item').forEach(item => {
                     item.classList.remove('dragging');
                     item.classList.remove('drag-over');
                 });
                 this.draggedIndex = null;
+                console.log('Drag ended.');
             });
 
             poemDiv.addEventListener('dragover', (e) => {
-                e.preventDefault(); // Allow drop
+                e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
                 const targetElement = e.currentTarget;
-
-                // Add drag-over class to visual feedback
                 document.querySelectorAll('.widget-poem-item').forEach(item => {
                     item.classList.remove('drag-over');
                 });
@@ -767,35 +806,35 @@
                 e.currentTarget.classList.remove('drag-over');
                 const draggedIdx = parseInt(e.dataTransfer.getData('text/plain'));
                 const dropTargetIndex = parseInt(e.currentTarget.dataset.index);
-
+                console.log(`Dropped poem from index ${draggedIdx} to index ${dropTargetIndex}.`);
                 if (draggedIdx !== dropTargetIndex && !isNaN(draggedIdx)) {
                     this.movePoem(draggedIdx, dropTargetIndex);
                 }
             });
 
-            // --- Keyboard accessibility for drag and drop (Ctrl + Arrow keys) ---
             poemDiv.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowUp' && e.ctrlKey && index > 0) {
-                    e.preventDefault(); // Prevent page scrolling
+                    e.preventDefault();
+                    console.log(`Keyboard move up for index ${index}.`);
                     this.movePoem(index, index - 1);
-                    // Re-focus the moved item to maintain accessibility
                     requestAnimationFrame(() => {
                         const newPoemDiv = document.querySelector(`.widget-poem-item[data-index="${index - 1}"]`);
                         if (newPoemDiv) newPoemDiv.focus();
                         this.announceToScreenReader('process-status', `Moved ${this.poems[index - 1].title} to position ${index}.`);
                     });
                 } else if (e.key === 'ArrowDown' && e.ctrlKey && index < this.poems.length - 1) {
-                    e.preventDefault(); // Prevent page scrolling
+                    e.preventDefault();
+                    console.log(`Keyboard move down for index ${index}.`);
                     this.movePoem(index, index + 1);
-                    // Re-focus the moved item
                     requestAnimationFrame(() => {
                         const newPoemDiv = document.querySelector(`.widget-poem-item[data-index="${index + 1}"]`);
                         if (newPoemDiv) newPoemDiv.focus();
                         this.announceToScreenReader('process-status', `Moved ${this.poems[index + 1].title} to position ${index + 2}.`);
                     });
                 } else if (e.key === 'Delete' || e.key === 'Backspace') {
-                    e.preventDefault(); // Prevent browser back navigation
-                    const confirmed = true; // No confirm() as per guidelines. Can implement custom modal if needed.
+                    e.preventDefault();
+                    console.log(`Keyboard delete for index ${index}.`);
+                    const confirmed = true;
                     if (confirmed) {
                         this.removePoem(index);
                         this.announceToScreenReader('process-status', `Removed ${this.poems[index].title}.`);
@@ -803,11 +842,11 @@
                 }
             });
 
-            // --- Click event listeners for move/remove buttons ---
             const moveUpBtn = poemDiv.querySelector('.widget-move-btn:not(.move-down)');
             if (moveUpBtn) {
                 moveUpBtn.addEventListener('click', (e) => {
                     e.preventDefault();
+                    console.log(`Move up button clicked for index ${index}.`);
                     if (index > 0) {
                         this.movePoem(index, index - 1);
                     }
@@ -818,6 +857,7 @@
             if (moveDownBtn) {
                 moveDownBtn.addEventListener('click', (e) => {
                     e.preventDefault();
+                    console.log(`Move down button clicked for index ${index}.`);
                     if (index < this.poems.length - 1) {
                         this.movePoem(index, index + 1);
                     }
@@ -828,7 +868,8 @@
             if (removeBtn) {
                 removeBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    const confirmed = true; // No confirm()
+                    console.log(`Remove button clicked for index ${index}.`);
+                    const confirmed = true;
                     if (confirmed) {
                         this.removePoem(index);
                     }
@@ -854,17 +895,19 @@
          * @param {number} toIndex - The target index for the poem.
          */
         movePoem(fromIndex, toIndex) {
+            console.log(`Moving poem from ${fromIndex} to ${toIndex}.`);
             if (fromIndex < 0 || fromIndex >= this.poems.length ||
                 toIndex < 0 || toIndex >= this.poems.length) {
                 console.error('Invalid indices for movePoem', fromIndex, toIndex);
                 return;
             }
 
-            const [movedPoem] = this.poems.splice(fromIndex, 1); // Remove from old position
-            this.poems.splice(toIndex, 0, movedPoem); // Insert into new position
-            this.updateDisplay(); // Re-render the list
+            const [movedPoem] = this.poems.splice(fromIndex, 1);
+            this.poems.splice(toIndex, 0, movedPoem);
+            this.updateDisplay();
             this.showNotification(`Moved "${movedPoem.title}" from position ${fromIndex + 1} to ${toIndex + 1}`, 'info');
             this.announceToScreenReader('process-status', `Poem moved. New order updated.`);
+            console.log(`Poem "${movedPoem.title}" successfully moved.`);
         }
 
         /**
@@ -872,14 +915,16 @@
          * @param {number} index - The index of the poem to remove.
          */
         removePoem(index) {
+            console.log(`Removing poem at index ${index}.`);
             if (index < 0 || index >= this.poems.length) {
                 console.error('Invalid index for removePoem', index);
                 return;
             }
-            const removedPoem = this.poems.splice(index, 1)[0]; // Remove the poem
-            this.updateDisplay(); // Re-render the list
+            const removedPoem = this.poems.splice(index, 1)[0];
+            this.updateDisplay();
             this.showNotification(`Removed "${removedPoem.title}"`, 'info');
             this.announceToScreenReader('process-status', `Poem ${removedPoem.title} removed.`);
+            console.log(`Poem "${removedPoem.title}" successfully removed.`);
         }
 
         /**
@@ -889,14 +934,17 @@
          * @param {number} [duration=5000] - Duration in milliseconds before the notification fades.
          */
         showNotification(message, type, duration = 5000) {
+            console.log(`Notification (${type}): ${message}`);
             const notificationContainer = document.getElementById('notificationContainer');
-            if (!notificationContainer) return;
+            if (!notificationContainer) {
+                console.warn('Notification container not found.');
+                return;
+            }
 
-            // Clear any existing timeout
             if (this.notificationTimeout) {
                 clearTimeout(this.notificationTimeout);
             }
-            notificationContainer.innerHTML = ''; // Clear previous notifications
+            notificationContainer.innerHTML = '';
 
             const notificationDiv = document.createElement('div');
             notificationDiv.classList.add('widget-notification', type, 'opacity-0', 'transition-opacity', 'duration-300');
@@ -907,20 +955,20 @@
             `;
             notificationContainer.appendChild(notificationDiv);
 
-            // Trigger fade-in
             setTimeout(() => {
                 notificationDiv.classList.remove('opacity-0');
-            }, 10); // Small delay to allow render before transition
+            }, 10);
 
-            // Set timeout to fade out and remove
-            this.notificationTimeout = setTimeout(() => {
-                notificationDiv.classList.add('opacity-0');
-                notificationDiv.addEventListener('transitionend', () => {
-                    if (notificationDiv.parentNode) {
-                        notificationDiv.parentNode.removeChild(notificationDiv);
-                    }
-                }, { once: true });
-            }, duration);
+            if (duration > 0) { // Only set timeout if duration is positive
+                this.notificationTimeout = setTimeout(() => {
+                    notificationDiv.classList.add('opacity-0');
+                    notificationDiv.addEventListener('transitionend', () => {
+                        if (notificationDiv.parentNode) {
+                            notificationDiv.parentNode.removeChild(notificationDiv);
+                        }
+                    }, { once: true });
+                }, duration);
+            }
         }
 
         /**
@@ -947,6 +995,9 @@
             const el = document.getElementById(elementId);
             if (el) {
                 el.textContent = message;
+                console.log(`ARIA announcement for "${elementId}": ${message}`);
+            } else {
+                console.warn(`ARIA live region element with ID "${elementId}" not found.`);
             }
         }
 
@@ -962,12 +1013,11 @@
             let tocHtml = `<h2 style="text-align: center; margin-bottom: 20px; font-size: 2em; color: #333;">Table of Contents</h2>\n`;
             tocHtml += `<ol style="list-style-type: decimal; margin-left: 20px; line-height: 1.8;">\n`;
             this.poems.forEach((poem, index) => {
-                // Ensure unique IDs for anchors
                 const poemAnchorId = `poem-${index + 1}-${poem.id}`;
                 tocHtml += `<li><a href="#${poemAnchorId}" style="color: #007bff; text-decoration: none;">${this.escapeHtml(poem.title)}</a></li>\n`;
             });
             tocHtml += `</ol>\n\n`;
-            tocHtml += `<div style="page-break-after: always;"></div>\n`; // Page break after TOC
+            tocHtml += `<div style="page-break-after: always;"></div>\n`;
             return tocHtml;
         }
 
@@ -975,15 +1025,16 @@
          * Downloads the combined document in the selected format.
          */
         async downloadCombinedDocument() {
+            console.log('Initiating download of combined document.');
             if (this.poems.length === 0) {
                 this.showNotification('No poems to download!', 'warning');
+                console.warn('Download attempted with no poems.');
                 return;
             }
 
             const exportFormat = document.getElementById('exportFormat').value;
             const downloadBtn = document.getElementById('downloadBtn');
 
-            // Set UI to downloading state
             downloadBtn.disabled = true;
             const originalText = downloadBtn.textContent;
             downloadBtn.textContent = 'Generating...';
@@ -994,6 +1045,7 @@
                 let blob;
 
                 const combinedHtml = this._generateHtmlContentForExport();
+                console.log(`Generated combined HTML for export. Format: ${exportFormat}`);
 
                 switch (exportFormat) {
                     case 'html':
@@ -1001,25 +1053,26 @@
                         filename += '.html';
                         break;
                     case 'docx':
-                        // For .docx, we're essentially saving an HTML file with a .doc/.docx extension.
-                        // Word is generally good at opening these.
                         blob = new Blob([combinedHtml], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
                         filename += '.docx';
                         this.showNotification('Downloading .docx. Please note: This is an HTML file saved as .docx for compatibility with Word. Formatting may vary.', 'info', 10000);
                         break;
                     case 'pdf':
-                        // Use html2pdf.js for PDF generation
+                        console.log('Generating PDF...');
                         await this._generatePdfOutput(combinedHtml, filename);
                         this.showNotification('PDF generated!', 'success');
                         this.resetDownloadUI(downloadBtn, originalText);
-                        return; // Exit as html2pdf handles saving
+                        console.log('PDF generation and download complete.');
+                        return;
                     default:
                         this.showNotification('Invalid export format selected.', 'error');
+                        console.error('Invalid export format:', exportFormat);
                         return;
                 }
 
                 saveAs(blob, filename); // Uses FileSaver.js
                 this.showNotification('Document downloaded successfully!', 'success');
+                console.log(`File "${filename}" downloaded.`);
 
             } catch (error) {
                 console.error('Error during document download:', error);
@@ -1035,12 +1088,12 @@
          * @param {string} originalText - The original text content of the button.
          */
         resetDownloadUI(downloadBtn, originalText) {
+            console.log('Resetting download UI.');
             downloadBtn.textContent = originalText;
             downloadBtn.disabled = this.poems.length === 0;
-            // Clear the indefinite notification
             const notificationContainer = document.getElementById('notificationContainer');
             if (notificationContainer) {
-                notificationContainer.innerHTML = '';
+                notificationContainer.innerHTML = ''; // Clear indefinite notification
             }
         }
 
@@ -1092,7 +1145,7 @@
                         margin-bottom: 40px;
                         padding-bottom: 20px;
                         border-bottom: 1px dashed #ddd;
-                        page-break-inside: avoid; /* Prevent page breaks within a poem */
+                        page-break-inside: avoid;
                     }
                     .poem-container:last-of-type {
                         border-bottom: none;
@@ -1128,7 +1181,6 @@
                         color: #0056b3;
                         text-decoration: underline;
                     }
-                    /* Page break for printing/PDF */
                     .page-break-after {
                         page-break-after: always;
                     }
@@ -1142,7 +1194,7 @@
             `;
 
             this.poems.forEach((poem, index) => {
-                const poemAnchorId = `poem-${index + 1}-${poem.id}`; // Match TOC anchor IDs
+                const poemAnchorId = `poem-${index + 1}-${poem.id}`;
                 combinedHtml += `
                 <div class="poem-container" id="${poemAnchorId}">
                     <h2>${this.escapeHtml(poem.title)}</h2>
@@ -1150,7 +1202,6 @@
                     ${poem.htmlContent}
                 </div>
                 `;
-                // Add page break after each poem for better printing/PDF layout, unless it's the last one
                 if (index < this.poems.length - 1) {
                     combinedHtml += `<div class="page-break-after"></div>`;
                 }
@@ -1170,34 +1221,33 @@
          */
         async _generatePdfOutput(htmlContent, filename) {
             const opt = {
-                margin: [20, 20, 20, 20], // Top, Left, Bottom, Right
+                margin: [20, 20, 20, 20],
                 filename: filename,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2 },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
 
-            // Create a temporary element to render the HTML for html2pdf
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = htmlContent;
-            tempDiv.style.width = '210mm'; // Set a fixed width for A4
+            tempDiv.style.width = '210mm';
             tempDiv.style.margin = '0 auto';
-            tempDiv.style.visibility = 'hidden'; // Hide it from user view
+            tempDiv.style.visibility = 'hidden';
             document.body.appendChild(tempDiv);
+            console.log('Temporary div created and appended for PDF generation.');
 
             try {
-                // Use html2pdf to convert the tempDiv content
                 await html2pdf().set(opt).from(tempDiv).save();
+                console.log('html2pdf finished saving.');
             } finally {
-                // Clean up the temporary element
                 if (tempDiv.parentNode) {
                     document.body.removeChild(tempDiv);
+                    console.log('Temporary div removed.');
                 }
             }
         }
     }
 
-    // Initialize the PoemCompiler once the DOM is fully loaded
     document.addEventListener('DOMContentLoaded', () => {
         new PoemCompiler();
     });
