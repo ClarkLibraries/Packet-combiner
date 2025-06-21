@@ -283,13 +283,12 @@
         </section>
     </div>
 
-    <!-- External Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth.js/1.4.8/mammoth.browser.min.js"></script>
+     <!-- External Libraries -->
+    <!-- Changed Mammoth.js to load from UNPKG CDN for better local file compatibility -->
+    <script src="https://unpkg.com/mammoth@1.9.1/mammoth.browser.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <!-- Your script.js content will go here -->
-    <script id="main-script">
-        // The script.js content will be dynamically inserted here by the model
-    </script>
+    <script src="./script.js"></script>
 </body>
 </html>
