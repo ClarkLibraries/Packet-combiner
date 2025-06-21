@@ -3,292 +3,236 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Poem Combiner Tool</title>
-    <!-- Tailwind CSS CDN -->
+    <title>Packet Compiler</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-            color: #374151;
-            line-height: 1.6;
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
         }
         .container {
-            max-width: 960px;
-            margin: 2rem auto;
-            padding: 1.5rem;
-            background-color: #ffffff;
-            border-radius: 0.75rem; /* rounded-xl */
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-xl */
+            max-width: 900px;
+            margin: 2em auto;
+            padding: 1em;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
         }
-        .widget-header {
-            border-bottom: 2px solid #e5e7eb;
-            padding-bottom: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .widget-upload-area {
+        .file-upload-area {
             border: 2px dashed #d1d5db;
-            border-radius: 0.5rem; /* rounded-lg */
-            padding: 2rem;
+            border-radius: 8px;
+            padding: 2.5em 1.5em;
             text-align: center;
             cursor: pointer;
             transition: all 0.2s ease-in-out;
-            margin-bottom: 1rem;
+            background-color: #f9fafb;
         }
-        .widget-upload-area:hover {
+        .file-upload-area:hover {
             border-color: #3b82f6;
             background-color: #eff6ff;
         }
-        .widget-upload-area.has-files {
-            border-color: #10b981;
-            background-color: #ecfdf5;
+        .file-upload-area.has-files {
+            border-color: #10b981; /* Green border when files are selected */
+            background-color: #ecfdf5; /* Light green background when files are selected */
         }
-        .widget-upload-area span:first-child {
-            font-size: 3rem; /* text-5xl */
-            display: block;
-            margin-bottom: 0.5rem;
+        .file-upload-area input[type="file"] {
+            display: none;
         }
-        .widget-upload-area small {
+        .file-upload-area span {
             display: block;
+            margin-bottom: 0.5em;
+        }
+        .file-upload-area small {
             color: #6b7280;
-            margin-top: 0.5rem;
         }
-        .widget-button {
-            padding: 0.75rem 1.5rem;
-            border-radius: 0.5rem;
-            font-weight: 600;
-            transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-            cursor: pointer;
-            border: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .widget-button-primary {
-            background-color: #3b82f6;
-            color: #ffffff;
-        }
-        .widget-button-primary:hover:not(:disabled) {
-            background-color: #2563eb;
-            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3), 0 2px 4px -1px rgba(59, 130, 246, 0.2);
-        }
-        .widget-button-secondary {
-            background-color: #e5e7eb;
-            color: #374151;
-        }
-        .widget-button-secondary:hover:not(:disabled) {
-            background-color: #d1d5db;
-            box-shadow: 0 4px 6px -1px rgba(107, 114, 128, 0.1), 0 2px 4px -1px rgba(107, 114, 128, 0.05);
-        }
-        .widget-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        .widget-notification {
-            padding: 1rem;
-            border-radius: 0.5rem;
-            margin-top: 1rem;
-            display: flex;
-            align-items: center;
-            font-weight: 500;
-        }
-        .widget-notification.success {
-            background-color: #d1fae5;
-            color: #065f46;
-        }
-        .widget-notification.warning {
-            background-color: #fffbeb;
-            color: #92400e;
-        }
-        .widget-notification.error {
-            background-color: #fee2e2;
-            color: #991b1b;
-        }
-        .widget-notification.info {
-            background-color: #e0f2fe;
-            color: #0369a1;
-        }
-        .widget-progress-container {
-            width: 100%;
-            background-color: #e5e7eb;
-            border-radius: 0.25rem;
-            height: 0.5rem;
-            overflow: hidden;
-            margin-top: 1rem;
-            display: none; /* hidden by default */
-        }
-        .widget-progress-bar {
-            height: 100%;
-            background-color: #3b82f6;
-            width: 0%;
-            border-radius: 0.25rem;
-            transition: width 0.2s ease-in-out;
-        }
-        .widget-poem-list {
+        .packet-item {
             list-style: none;
-            padding: 0;
-            margin-top: 1.5rem;
+            cursor: grab; /* Indicates draggable */
+            margin-bottom: 0.75em;
+            /* Tailwind classes already define much of this: */
+            /* bg-white p-4 shadow-sm rounded-lg flex items-center justify-between transition-all duration-200 ease-in-out */
         }
-        .widget-poem-item {
+        .packet-item.dragging {
+            opacity: 0.5;
+            border: 2px dashed #3b82f6;
+            background-color: #e0f2fe;
+        }
+        #progressContainer {
+            display: none; /* Hidden by default */
+        }
+        #notification {
+            opacity: 0; /* Hidden by default, controlled by JS */
+        }
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
             display: flex;
+            justify-content: center;
             align-items: center;
-            justify-content: space-between;
-            padding: 1rem 1.25rem;
-            border: 1px solid #e5e7eb;
-            background-color: #f9fafb;
-            border-radius: 0.5rem;
-            margin-bottom: 0.75rem;
-            transition: all 0.2s ease-in-out;
-            cursor: grab;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #fff;
+            padding: 2em;
+            border-radius: 8px;
+            max-width: 700px;
+            max-height: 80vh;
+            overflow-y: auto;
             position: relative;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
         }
-        .widget-poem-item:focus {
-            outline: 2px solid #3b82f6;
-            outline-offset: 2px;
+        .modal-close-btn {
+            position: absolute;
+            top: 1em;
+            right: 1em;
+            background: none;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #666;
         }
-        .widget-poem-item.dragging {
-            opacity: 0.4;
+        .modal-close-btn:hover {
+            color: #333;
         }
-        .widget-poem-item.drag-over {
-            border-color: #3b82f6;
-            background-color: #eff6ff;
+        /* Styling for content within the modal - from Mammoth.js HTML */
+        #packetModalContent p {
+            margin-bottom: 0.5em;
         }
-        .widget-drag-indicator {
-            font-size: 1.5rem;
-            color: #9ca3af;
-            cursor: grab;
-            margin-right: 1rem;
+        #packetModalContent h1, #packetModalContent h2, #packetModalContent h3, #packetModalContent h4, #packetModalContent h5, #packetModalContent h6 {
+            margin-top: 1em;
+            margin-bottom: 0.5em;
         }
-        .widget-poem-details {
-            flex-grow: 1;
-            text-align: left;
+        #packetModalContent ul, #packetModalContent ol {
+            margin-left: 1.5em;
+            margin-bottom: 0.5em;
         }
-        .widget-poem-details h3 {
-            font-weight: 600;
-            color: #111827;
-            margin-bottom: 0.25rem;
-        }
-        .widget-poem-details p {
-            font-size: 0.875rem; /* text-sm */
-            color: #6b7280;
-            margin-bottom: 0.125rem;
-        }
-        .widget-poem-controls {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            margin-left: 1rem;
-        }
-        .widget-move-btn, .widget-remove-btn {
-            background-color: #f3f4f6;
-            border: 1px solid #d1d5db;
-            color: #4b5563;
-            padding: 0.5rem;
-            border-radius: 0.375rem; /* rounded-md */
-            font-size: 0.875rem; /* text-sm */
-            line-height: 1;
-            transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out, color 0.2s ease-in-out;
-        }
-        .widget-move-btn:hover:not(:disabled), .widget-remove-btn:hover:not(:disabled) {
-            background-color: #e5e7eb;
-            border-color: #9ca3af;
-            color: #111827;
-        }
-        .widget-remove-btn {
-            background-color: #fee2e2;
-            border-color: #fca5a5;
-            color: #dc2626;
-        }
-        .widget-remove-btn:hover:not(:disabled) {
-            background-color: #fecaca;
-            border-color: #ef4444;
-            color: #b91c1c;
-        }
-        .widget-empty-state {
-            text-align: center;
-            padding: 2rem;
-            color: #6b7280;
-            font-style: italic;
-            background-color: #f9fafb;
-            border-radius: 0.5rem;
-            border: 1px dashed #e5e7eb;
-        }
-        .download-options {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-        }
-        .download-options label {
-            font-weight: 500;
-            color: #4b5563;
-        }
-        #notificationContainer {
-            min-height: 2.5rem; /* Ensure space for notifications */
+        #packetModalContent li {
+            margin-bottom: 0.2em;
         }
     </style>
 </head>
-<body class="p-4 sm:p-6 lg:p-8">
-    <div class="container">
-        <header class="widget-header">
-            <h1 class="text-3xl font-bold text-gray-900 mb-2">Poem Combiner Tool</h1>
-            <p class="text-gray-600">Upload multiple Word documents containing poems, reorder them, and download a merged document with a table of contents.</p>
-        </header>
+<body class="bg-gray-100 p-6">
+    <div class="container bg-white p-8 rounded-lg shadow-xl">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">Packet Compiler</h1>
 
-        <section class="mb-6">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">1. Upload Documents</h2>
-            <div class="widget-upload-area relative" id="fileLabel">
-                <span>📄</span>
-                <span>Click here or drag Word documents to upload</span>
-                <small>Multiple files supported (.docx only)</small>
-                <input type="file" id="wordFiles" accept=".docx" multiple class="absolute inset-0 opacity-0 cursor-pointer">
-            </div>
-            <div class="flex flex-col sm:flex-row gap-4 mt-4">
-                <button id="processBtn" class="widget-button widget-button-primary flex-1 sm:flex-grow-0" disabled>
-                    Process Documents
-                </button>
-                <button id="clearBtn" class="widget-button widget-button-secondary flex-1 sm:flex-grow-0" disabled>
-                    Clear All Poems
-                </button>
-            </div>
-            <div id="progressContainer" class="widget-progress-container mt-4" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Document processing progress">
-                <div id="progressBar" class="widget-progress-bar"></div>
-            </div>
-            <div id="notificationContainer" class="mt-4" aria-live="polite"></div>
-            <div id="process-status" class="sr-only" aria-live="assertive"></div>
-        </section>
+        <div class="mb-8">
+            <label for="wordFiles" id="fileLabel" class="file-upload-area block text-blue-600 font-medium text-lg">
+                <span>📄 Click here or drag Word documents to upload</span>
+                <small>Multiple files supported</small>
+                <input type="file" id="wordFiles" accept=".docx" multiple>
+            </label>
+            <p class="text-sm text-gray-500 mt-2 text-center" id="process-status" aria-live="polite">No documents selected.</p>
+        </div>
 
-        <section class="mb-6">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">2. Arrange Poems (<span id="poemCount">0</span> loaded)</h2>
-            <div id="poemList" class="widget-poem-list" role="list">
-                <div class="widget-empty-state">
-                    <p>No poems loaded yet. Upload and process Word documents to begin.</p>
-                </div>
-            </div>
-        </section>
+        <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4 mb-8">
+            <button id="processBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Process Documents
+            </button>
+            <button id="downloadBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Download Combined HTML
+            </button>
+            <button id="clearBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Clear All
+            </button>
+        </div>
 
-        <section>
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">3. Download Merged Document</h2>
-            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4 download-options">
-                <label for="exportFormat" class="whitespace-nowrap">Export as:</label>
-                <select id="exportFormat" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 flex-grow">
-                    <option value="html">HTML Document (.html)</option>
-                    <option value="docx">Word Document (.docx)</option>
-                    <option value="pdf">PDF Document (.pdf)</option>
-                </select>
-                <button id="downloadBtn" class="widget-button widget-button-primary w-full sm:w-auto" disabled>
-                    Download Combined Document
-                </button>
+        <div id="progressContainer" class="w-full bg-gray-200 rounded-full h-4 mb-6">
+            <div id="progressBar" class="bg-blue-500 h-4 rounded-full text-xs text-white flex items-center justify-center" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%;">
+                <span class="sr-only">0% Complete</span>
             </div>
-        </section>
+        </div>
+
+        <h2 class="text-2xl font-bold text-gray-800 mb-4 text-center">Loaded packets (<span id="packetCount">0</span>)</h2>
+        <p id="packetsPlaceholder" class="text-gray-500 text-center py-8">
+            No packets loaded yet. Upload and process Word documents to see them here!
+        </p>
+        <ul id="packetsList" class="space-y-3">
+        </ul>
+        <p id="packet-list-status" class="sr-only" aria-live="polite"></p>
     </div>
 
-     <!-- External Libraries -->
-    <!-- Changed Mammoth.js to load from UNPKG CDN for better local file compatibility -->
-    <script src="https://unpkg.com/mammoth@1.9.1/mammoth.browser.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <!-- Your script.js content will go here -->
-    <script src="./script.js"></script>
+    <div id="notification" class="notification fixed bottom-4 right-4 p-3 rounded-md shadow-lg text-white opacity-0 transition-opacity duration-300 z-50">
+    </div>
+
+    <div id="packetModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="packetModalTitle" aria-hidden="true">
+        <div class="modal-content">
+            <button id="closeModal" class="modal-close-btn" aria-label="Close packet view">&times;</button>
+            <h2 id="packetModalTitle" class="text-2xl font-bold mb-4 text-gray-800">packet Title</h2>
+            <div id="packetModalContent" class="prose max-w-none">
+            </div>
+        </div>
+    </div>
+
+    <div class="container bg-white p-8 rounded-lg shadow-xl mt-8">
+        <details>
+            <summary class="text-xl font-bold text-gray-800 cursor-pointer py-2">
+                Tips for Faculty: Getting the Best Results from the Packet Compiler
+            </summary>
+            <div class="prose max-w-none text-gray-700 mt-4">
+                <p class="mb-4">
+                    This tool helps you turn Word documents (.docx) into a single, easy-to-navigate HTML file for your students. Follow these simple tips to get clean, organized results: 
+                </p>
+
+                <h3 class="text-lg font-semibold mb-2">Use Heading Styles for Best Results</h3>
+                <p>
+                    Before you upload your documents, make sure to apply Word’s built-in heading styles (Heading 1, 2, 3) to title each major section that you wish to combine.  These headings will: 
+                </p>
+                <ul class="list-disc list-inside mb-4 space-y-1">
+                    <li>Become titles that will appear in the Table of Contents </li>
+                    <li>Tell the compiler where one section ends and another begins </li>
+                    <li>Work more reliably than any other method </li>
+                    <li>Keep titles clear and concise for easy navigation. </li>
+                </ul>
+
+                <h3 class="text-lg font-semibold mb-2">Alternative Section Breaks (if needed)</h3>
+                <p class="mb-2">
+                    If you don’t use headings, the tool can try to separate content by: 
+                </p>
+                <ul class="list-disc list-inside mb-4 space-y-1">
+                    <li>Line separators like ```, ---, ___, ===, or ~~~ (on a line by themselves) </li>
+                    <li>Multiple blank lines (pressing Enter twice or more) </li>
+                </ul>
+                <p class="mb-4 text-sm text-red-700">
+                    Note: These methods are less accurate than headings and may not work well if formatting is inconsistent. 
+                </p>
+
+                <h3 class="text-lg font-semibold mb-2">One or More Sources of Content the uploaded files</h3>
+                <ul class="list-disc list-inside mb-4 space-y-1">
+                    <li>If there aren’t multiple sources of content in the source file (e.g., multiple poems, sections, chapters, etc, in the file you’re uploading), then no headings are needed—the tool will use the filename or first lines as the title. </li>
+                    <li>If there are multiple sources of content in the source file, then use heading styles to define each one clearly. </li>
+                    <li>You can upload multiple .docx files simultaneously, and the tool will process each one independently to extract packets. All extracted packets from all uploaded files will be added to the same list for combining.</li>
+                    <li>You can also upload additional .docx files even after you’ve already processed some. New packets will be added to the existing list, allowing you to compile content from various sources over time.</li>
+                </ul>
+
+                <h3 class="text-lg font-semibold mb-2">What the Final HTML Will Include</h3>
+                <ul class="list-disc list-inside mb-4 space-y-1">
+                    <li>Interactive Table of Contents at the top of the exported html document. </li>
+                    <li>Preserved formatting of the original content for bold, italics, lists, tables, images, and links </li>
+                    <li>Images included, no separate files needed </li>
+                </ul>
+
+                <h3 class="text-lg font-semibold mb-2">Helpful Tips</h3>
+                <ul class="list-disc list-inside mb-4 space-y-1">
+                    <li>Preview content using the “View” button before downloading </li>
+                    <li>Reorder the content by dragging or using arrow buttons </li>
+                    <li>Reset if needed with “Clear All” and try again </li>
+                    <li>Use clear filenames to stay organized </li>
+                    <li>Once your HTML is compiled, feel free to copy and paste it into Word for further editing or to export as a PDF. </li>
+                </ul>
+                <p class="mb-4">
+                    We're glad to support your teaching. Let us know if you have questions or feedback! 
+                </p>
+            </div>
+        </details>
+    </div>
+
+    <script src="[https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js](https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js)"></script>
+    <script src="script.js"></script>
 </body>
 </html>
